@@ -4,6 +4,7 @@
 
 #include <fcntl.h>
 #include <sys/mman.h>
+#include <cerrno>
 
 namespace dawn
 {
@@ -89,5 +90,27 @@ void* createOrOpenShm(const char* shm_name, size_t size)
 
     return openShm(shm_name, size);
 }
+
+bool unmapShm(void* shm_ptr, size_t size)
+{
+    if (shm_ptr == nullptr || size == 0)
+    {
+        LOG_ERROR("shm_ptr is nullptr or size is 0. size = {}", size);
+        return false;
+    }
+
+    if (munmap(shm_ptr, size) == -1)
+    {
+        LINUX_ERROR_PRINT();
+        return false;
+    }
+
+    return true;
+}
+
+void* createShm(const std::string_view shm_name, size_t size) { return createShm(shm_name.data(), size); }
+void* openShm(const std::string_view shm_name, size_t size) { return openShm(shm_name.data(), size); }
+void* createOrOpenShm(const std::string_view shm_name, size_t size) { return createOrOpenShm(shm_name.data(), size); }
+
 }  // namespace shm_utilities
 }  // namespace dawn

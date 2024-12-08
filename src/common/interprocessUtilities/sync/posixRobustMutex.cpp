@@ -1,29 +1,23 @@
-#include "sync/posixRobustMutex.h"
-#include "setLogger.h"
-#include "type.h"
+#include "interprocessUtilities/sync/posixRobustMutex.h"
 
-#include <errno.h>
-
-#include <cstring>
 #include <stdexcept>
-#include <string>
 
 namespace dawn
 {
-
+namespace interprocess
+{
 PosixRobustMutex::PosixRobustMutex()
 {
     pthread_mutexattr_t attr;
     pthread_mutexattr_init(&attr);
     pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST);
+    pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED);
     pthread_mutex_init(&mutex_, &attr);
     pthread_mutexattr_destroy(&attr);
 
     bool expect_initialized_flag = false;
     is_initialized_.compare_exchange_strong(expect_initialized_flag, true, std::memory_order_release, std::memory_order_relaxed);
 }
-
-PosixRobustMutex::~PosixRobustMutex() { pthread_mutex_destroy(&mutex_); }
 
 bool PosixRobustMutex::isInitialized() const { return is_initialized_; }
 
@@ -44,20 +38,23 @@ bool PosixRobustMutex::initialize()
     pthread_mutexattr_t attr;
     if (pthread_mutexattr_init(&attr))
     {
-        LINUX_ERROR_PRINT();
         return false;
     }
 
     if (pthread_mutexattr_setrobust(&attr, PTHREAD_MUTEX_ROBUST))
     {
-        LINUX_ERROR_PRINT();
+        pthread_mutexattr_destroy(&attr);
+        return false;
+    }
+
+    if (pthread_mutexattr_setpshared(&attr, PTHREAD_PROCESS_SHARED))
+    {
         pthread_mutexattr_destroy(&attr);
         return false;
     }
 
     if (pthread_mutex_init(&mutex_, &attr))
     {
-        LINUX_ERROR_PRINT();
         pthread_mutexattr_destroy(&attr);
         return false;
     }
@@ -75,6 +72,7 @@ int PosixRobustMutex::lock()
     {
         throw std::runtime_error("mutex is not initialized");
     }
+
     return pthread_mutex_lock(&mutex_);
 }
 
@@ -84,6 +82,7 @@ void PosixRobustMutex::unlock()
     {
         throw std::runtime_error("mutex is not initialized");
     }
+
     pthread_mutex_unlock(&mutex_);
 }
 
@@ -99,12 +98,13 @@ int PosixRobustMutex::tryLock()
 
 bool PosixRobustMutex::recover()
 {
-    auto result = pthread_mutex_consistent(&mutex_);
-    if (result == 0)
+    if (is_initialized_ == false)
     {
-        return PROCESS_SUCCESS;
+        throw std::runtime_error("mutex is not initialized");
     }
 
-    throw std::runtime_error("recover failed result: " + std::to_string(result) + " " + std::string(strerror(result)));
+    return pthread_mutex_consistent(&mutex_) == 0;
 }
+
+}  // namespace interprocess
 }  // namespace dawn

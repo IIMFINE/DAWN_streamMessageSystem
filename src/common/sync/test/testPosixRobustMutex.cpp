@@ -1,9 +1,9 @@
-#include "common/type.h"
 #include "gtest/gtest.h"
 
 #include "common/interprocessUtilities/shm/shmUtilities.h"
 #include "common/setLogger.h"
 #include "common/sync/posixRobustMutex.h"
+#include "common/type.h"
 
 TEST(test_posix_robust_mutex, intraprocess_lock)
 {
